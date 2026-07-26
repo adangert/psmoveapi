@@ -736,6 +736,43 @@ _psmove_set_operation_mode(PSMove *move, enum PSMove_Operation_Mode mode)
     return (res == sizeof(buf));
 }
 
+static bool
+psmove_update_remote_description(PSMove *move, bool require_same_serial)
+{
+    if (!moved_client_send(move->client, MOVED_REQ_GET_SERIAL,
+            (char)move->remote_id, NULL, 0)) {
+        return false;
+    }
+
+    char *serial = _psmove_btaddr_to_string(*((PSMove_Data_BTAddr *)
+            move->client->response_buf.get_serial.btaddr));
+    if (require_same_serial &&
+            (move->serial_number == NULL || strcmp(serial, move->serial_number) != 0)) {
+        psmove_free_mem(serial);
+        return false;
+    }
+
+    if (move->serial_number == NULL) {
+        move->serial_number = serial;
+    } else {
+        psmove_free_mem(serial);
+    }
+
+    if (move->client->response_buf.get_serial.model_marker == MOVED_CONTROLLER_MODEL_MARKER &&
+            move->client->response_buf.get_serial.model > Model_Unknown &&
+            move->client->response_buf.get_serial.model < Model_Count) {
+        move->model = (enum PSMove_Model_Type)move->client->response_buf.get_serial.model;
+    }
+    if (move->client->response_buf.get_serial.model_marker == MOVED_CONTROLLER_MODEL_MARKER &&
+            (move->client->response_buf.get_serial.connection_type == Conn_Bluetooth ||
+             move->client->response_buf.get_serial.connection_type == Conn_USB)) {
+        move->connection_type = (enum PSMove_Connection_Type)
+                move->client->response_buf.get_serial.connection_type;
+    }
+
+    return true;
+}
+
 PSMove *
 psmove_connect_remote_by_id(int id, moved_client *client, int remote_id)
 {
@@ -758,23 +795,7 @@ psmove_connect_remote_by_id(int id, moved_client *client, int remote_id)
     move->id = id;
 
     /* Remember the serial number */
-    if (moved_client_send(move->client, MOVED_REQ_GET_SERIAL, (char)move->remote_id, NULL, 0)) {
-        /* Retrieve the serial number from the remote host */
-        move->serial_number = _psmove_btaddr_to_string(*((PSMove_Data_BTAddr *)
-                move->client->response_buf.get_serial.btaddr));
-
-        if (move->client->response_buf.get_serial.model_marker == MOVED_CONTROLLER_MODEL_MARKER &&
-                move->client->response_buf.get_serial.model > Model_Unknown &&
-                move->client->response_buf.get_serial.model < Model_Count) {
-            move->model = (enum PSMove_Model_Type)move->client->response_buf.get_serial.model;
-        }
-        if (move->client->response_buf.get_serial.model_marker == MOVED_CONTROLLER_MODEL_MARKER &&
-                (move->client->response_buf.get_serial.connection_type == Conn_Bluetooth ||
-                 move->client->response_buf.get_serial.connection_type == Conn_USB)) {
-            move->connection_type = (enum PSMove_Connection_Type)
-                    move->client->response_buf.get_serial.connection_type;
-        }
-    } else {
+    if (!psmove_update_remote_description(move, false)) {
         /* No serial number -- FATAL? */
         PSMOVE_WARNING("Cannot retrieve serial number");
         move->serial_number = (char*)calloc(PSMOVE_MAX_SERIAL_LENGTH, sizeof(char));
@@ -792,6 +813,55 @@ psmove_connect_remote_by_id(int id, moved_client *client, int remote_id)
     psmove_num_open_handles++;
 
     return move;
+}
+
+bool
+_psmove_refresh_remote(PSMove *move)
+{
+    psmove_return_val_if_fail(move != NULL, false);
+    psmove_return_val_if_fail(psmove_is_remote(move), false);
+    return psmove_update_remote_description(move, true);
+}
+
+int
+_psmove_count_connected_remote(void)
+{
+    if (psmove_remote_disabled) {
+        return 0;
+    }
+    if (clients == NULL) {
+        clients = moved_client_list_open();
+    }
+
+    int count = 0;
+    moved_client_list *cur;
+    for (cur=clients; cur != NULL; cur=cur->next) {
+        count += psmove_count_connected_moved(cur->client);
+    }
+    return count;
+}
+
+PSMove *
+_psmove_connect_remote_by_id(int id)
+{
+    if (psmove_remote_disabled) {
+        return NULL;
+    }
+    if (clients == NULL) {
+        clients = moved_client_list_open();
+    }
+
+    int offset = 0;
+    moved_client_list *cur;
+    for (cur=clients; cur != NULL; cur=cur->next) {
+        int count = psmove_count_connected_moved(cur->client);
+        int remote_id = id - offset;
+        if (remote_id >= 0 && remote_id < count) {
+            return psmove_connect_remote_by_id(id, cur->client, remote_id);
+        }
+        offset += count;
+    }
+    return NULL;
 }
 
 static int

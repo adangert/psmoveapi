@@ -48,6 +48,9 @@ struct ControllerGlue {
     ~ControllerGlue();
 
     void add_handle(PSMove *handle);
+    void refresh_remote_handles();
+    bool has_remote_handle(enum PSMove_Connection_Type connection_type);
+    int remote_handle_count();
     void update_connection_flags();
 
     ControllerGlue(const ControllerGlue &other) = delete;
@@ -68,6 +71,7 @@ struct PSMoveAPI {
     PSMoveAPI(EventReceiver *receiver, void *user_data);
     ~PSMoveAPI();
 
+    void refresh_remote_controllers();
     void update();
 
     static void on_monitor_event(enum MonitorEvent event, enum MonitorEventDeviceType device_type, const char *path, const wchar_t *serial, unsigned short pid, void *user_data);
@@ -76,6 +80,7 @@ struct PSMoveAPI {
     void *user_data;
     std::vector<ControllerGlue *> controllers;
     moved_monitor *monitor;
+    long last_remote_refresh;
 };
 
 PSMoveAPI *
@@ -117,6 +122,44 @@ ControllerGlue::add_handle(PSMove *handle)
 }
 
 void
+ControllerGlue::refresh_remote_handles()
+{
+    if (move_bluetooth != nullptr && psmove_is_remote(move_bluetooth)) {
+        if (!_psmove_refresh_remote(move_bluetooth)) {
+            psmove_disconnect(move_bluetooth), move_bluetooth = nullptr;
+        } else if (psmove_connection_type(move_bluetooth) != Conn_Bluetooth) {
+            PSMove *handle = move_bluetooth;
+            move_bluetooth = nullptr;
+            add_handle(handle);
+        }
+    }
+
+    if (move_usb != nullptr && psmove_is_remote(move_usb)) {
+        if (!_psmove_refresh_remote(move_usb)) {
+            psmove_disconnect(move_usb), move_usb = nullptr;
+        } else if (psmove_connection_type(move_usb) != Conn_USB) {
+            PSMove *handle = move_usb;
+            move_usb = nullptr;
+            add_handle(handle);
+        }
+    }
+}
+
+bool
+ControllerGlue::has_remote_handle(enum PSMove_Connection_Type connection_type)
+{
+    PSMove *handle = connection_type == Conn_USB ? move_usb : move_bluetooth;
+    return handle != nullptr && psmove_is_remote(handle);
+}
+
+int
+ControllerGlue::remote_handle_count()
+{
+    return int(move_bluetooth != nullptr && psmove_is_remote(move_bluetooth)) +
+            int(move_usb != nullptr && psmove_is_remote(move_usb));
+}
+
+void
 ControllerGlue::update_connection_flags()
 {
     controller.usb = (move_usb != nullptr);
@@ -144,6 +187,7 @@ PSMoveAPI::PSMoveAPI(EventReceiver *receiver, void *user_data)
     , user_data(user_data)
     , controllers()
     , monitor(nullptr)
+    , last_remote_refresh(0)
 {
     std::map<std::string, std::vector<PSMove *>> moves;
 
@@ -202,8 +246,63 @@ PSMoveAPI::~PSMoveAPI()
 }
 
 void
+PSMoveAPI::refresh_remote_controllers()
+{
+    int active_remote_handles = 0;
+    for (auto &controller: controllers) {
+        controller->refresh_remote_handles();
+        active_remote_handles += controller->remote_handle_count();
+    }
+
+    int remote_count = _psmove_count_connected_remote();
+    if (active_remote_handles >= remote_count) {
+        return;
+    }
+
+    for (int remote_id=0; remote_id<remote_count; remote_id++) {
+        PSMove *move = _psmove_connect_remote_by_id(remote_id);
+        if (move == nullptr) {
+            continue;
+        }
+
+        char *serial = psmove_get_serial(move);
+        if (serial == nullptr) {
+            psmove_disconnect(move);
+            continue;
+        }
+
+        std::string controller_serial(serial);
+        psmove_free_mem(serial);
+
+        ControllerGlue *matching_controller = nullptr;
+        for (auto &controller: controllers) {
+            if (controller->serial == controller_serial) {
+                matching_controller = controller;
+                break;
+            }
+        }
+
+        if (matching_controller == nullptr) {
+            matching_controller = new ControllerGlue(controllers.size(), controller_serial);
+            controllers.emplace_back(matching_controller);
+        } else if (matching_controller->has_remote_handle(
+                psmove_connection_type(move))) {
+            psmove_disconnect(move);
+            continue;
+        }
+        matching_controller->add_handle(move);
+    }
+}
+
+void
 PSMoveAPI::update()
 {
+    long now = psmove_util_get_ticks();
+    if (now < last_remote_refresh || now - last_remote_refresh >= 250) {
+        refresh_remote_controllers();
+        last_remote_refresh = now;
+    }
+
 #ifndef _WIN32
     if (moved_monitor_get_fd(monitor) == -1) {
         moved_monitor_poll(monitor);

@@ -121,6 +121,18 @@ ADDAPI PSMove *
 ADDCALL psmove_connect_internal(const wchar_t *serial, const char *path, int id, unsigned short pid);
 
 /**
+ * [PRIVATE API] Refresh and enumerate moved-provided controllers.
+ **/
+ADDAPI bool
+ADDCALL _psmove_refresh_remote(PSMove *move);
+
+ADDAPI int
+ADDCALL _psmove_count_connected_remote(void);
+
+ADDAPI PSMove *
+ADDCALL _psmove_connect_remote_by_id(int id);
+
+/**
  * [PRIVATE API] Get device path of a controller (hidraw, Linux / for moved)
  **/
 ADDAPI const char *
