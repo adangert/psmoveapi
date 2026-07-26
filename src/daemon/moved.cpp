@@ -253,6 +253,8 @@ moved_server::handle_request()
                 }
                 response.get_serial.model = (uint8_t)psmove_get_model(dev->move);
                 response.get_serial.model_marker = MOVED_CONTROLLER_MODEL_MARKER;
+                response.get_serial.connection_type =
+                        (uint8_t)psmove_connection_type(dev->move);
                 psmove_free_mem(serial);
             } else {
                 printf("Cannot read from device %d.\n", request.header.controller_id);

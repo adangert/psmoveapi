@@ -106,6 +106,7 @@ union PACKED PSMoveMovedResponse {
                 uint8_t btaddr[6];
                 uint8_t model;
                 uint8_t model_marker;
+                uint8_t connection_type;
             } get_serial;
 
             struct {

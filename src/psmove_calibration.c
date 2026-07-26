@@ -418,7 +418,11 @@ psmove_calibration_new(PSMove *move)
 
     calibration->move = move;
 
-    if (psmove_connection_type(move) == Conn_USB) {
+    // A remote USB controller has no local HID handle for feature reports.
+    int local_usb = psmove_connection_type(move) == Conn_USB &&
+            !psmove_is_remote(move);
+
+    if (local_usb) {
         _psmove_read_btaddrs(move, NULL, &addr);
         serial = _psmove_btaddr_to_string(addr);
     } else {
@@ -447,7 +451,7 @@ psmove_calibration_new(PSMove *move)
     /* Try to load the calibration data from disk, or from USB */
     psmove_calibration_load(calibration);
     if (!psmove_calibration_supported(calibration)) {
-        if (psmove_connection_type(move) == Conn_USB) {
+        if (local_usb) {
             PSMOVE_DEBUG("Storing calibration from USB");
             psmove_calibration_read_from_usb(calibration);
             psmove_calibration_save(calibration);
@@ -785,4 +789,3 @@ psmove_calibration_free(PSMoveCalibration *calibration)
     psmove_free_mem(calibration->system_filename);
     free(calibration);
 }
-

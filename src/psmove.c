@@ -768,6 +768,12 @@ psmove_connect_remote_by_id(int id, moved_client *client, int remote_id)
                 move->client->response_buf.get_serial.model < Model_Count) {
             move->model = (enum PSMove_Model_Type)move->client->response_buf.get_serial.model;
         }
+        if (move->client->response_buf.get_serial.model_marker == MOVED_CONTROLLER_MODEL_MARKER &&
+                (move->client->response_buf.get_serial.connection_type == Conn_Bluetooth ||
+                 move->client->response_buf.get_serial.connection_type == Conn_USB)) {
+            move->connection_type = (enum PSMove_Connection_Type)
+                    move->client->response_buf.get_serial.connection_type;
+        }
     } else {
         /* No serial number -- FATAL? */
         PSMOVE_WARNING("Cannot retrieve serial number");
