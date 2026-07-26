@@ -73,6 +73,7 @@ BLUEZ5_INFO_ENTRY(unsigned short pid) {
         "SupportedTechnologies=BR/EDR\n"
         "Trusted=true\n"
         "Blocked=false\n"
+        "CablePairing=true\n"
         "Services=00001124-0000-1000-8000-00805f9b34fb;\n"
         "\n"
         "[DeviceID]\n"
@@ -120,10 +121,10 @@ file_exists(const std::string &filename)
 
 struct BluetoothDaemon {
     ~BluetoothDaemon() { restart_if_needed(); }
-    void restart_if_needed() { if (stopped) { control(true); } }
+    void restart_if_needed() { if (stopped) { force_restart(); } }
     void start() { control(true); }
     void stop() { if (!stopped) { control(false); } }
-    void force_restart() { stop(); start(); }
+    void force_restart() { control(false); control(true); }
 
 private:
     bool started { false };
@@ -784,4 +785,3 @@ psmove_port_register_psmove(char *addr, char *host, enum PSMove_Model_Type model
 
     return true;
 }
-

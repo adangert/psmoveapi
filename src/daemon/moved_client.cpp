@@ -234,15 +234,15 @@ moved_client_send(moved_client *client, enum PSMoveMovedCmd cmd, int controller_
     }
 
     while (retry_count < MOVED_MAX_RETRIES) {
-        int res = sendto(client->socket, (const char *)client->request_buf.bytes, sizeof(client->request_buf),
+        int res = sendto(client->socket, (const char *)client->request_buf.bytes, sizeof(client->request_buf.bytes),
                 /*flags=*/0, (struct sockaddr *)&(client->moved_addr), sizeof(client->moved_addr));
 
-        if (res == sizeof(client->request_buf)) {
+        if (res == sizeof(client->request_buf.bytes)) {
             while (1) {
-                res = recv(client->socket, (char *)client->response_buf.bytes, sizeof(client->response_buf),
+                res = recv(client->socket, (char *)client->response_buf.bytes, sizeof(client->response_buf.bytes),
                         /*flags=*/0);
 
-                if (res != sizeof(client->response_buf)) {
+                if (res != sizeof(client->response_buf.bytes)) {
                     break;
                 }
 
@@ -253,7 +253,7 @@ moved_client_send(moved_client *client, enum PSMoveMovedCmd cmd, int controller_
                 }
             }
 
-            if (res != sizeof(client->response_buf)) {
+            if (res != sizeof(client->response_buf.bytes)) {
                 if (client->request_buf.header.command_id == MOVED_REQ_SET_LEDS) {
                     // Writing LEDs should be fast, do not wait for a response here
                     return 0;
@@ -279,4 +279,3 @@ moved_client_destroy(moved_client *client)
     psmove_port_close_socket(client->socket);
     free(client);
 }
-

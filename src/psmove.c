@@ -751,7 +751,7 @@ psmove_connect_remote_by_id(int id, moved_client *client, int remote_id)
     /* Message type for LED set requests */
     move->leds.type = PSMove_Req_SetLEDs;
 
-    // TODO: Add support for other models
+    // Fall back to ZCM1 when talking to an older moved daemon.
     move->model = Model_ZCM1;
 
     /* Remember the ID/index */
@@ -762,6 +762,12 @@ psmove_connect_remote_by_id(int id, moved_client *client, int remote_id)
         /* Retrieve the serial number from the remote host */
         move->serial_number = _psmove_btaddr_to_string(*((PSMove_Data_BTAddr *)
                 move->client->response_buf.get_serial.btaddr));
+
+        if (move->client->response_buf.get_serial.model_marker == MOVED_CONTROLLER_MODEL_MARKER &&
+                move->client->response_buf.get_serial.model > Model_Unknown &&
+                move->client->response_buf.get_serial.model < Model_Count) {
+            move->model = (enum PSMove_Model_Type)move->client->response_buf.get_serial.model;
+        }
     } else {
         /* No serial number -- FATAL? */
         PSMOVE_WARNING("Cannot retrieve serial number");

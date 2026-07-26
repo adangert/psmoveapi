@@ -35,6 +35,10 @@ enum PSMoveUDPPort {
     MOVED_UDP_PORT = 17778,
 };
 
+enum {
+    MOVED_CONTROLLER_MODEL_MARKER = 0xA5,
+};
+
 enum PSMoveMovedCmd {
     MOVED_REQ_DISCOVER = 1,
     MOVED_REQ_COUNT_CONNECTED = 2,
@@ -100,6 +104,8 @@ union PACKED PSMoveMovedResponse {
 
             struct {
                 uint8_t btaddr[6];
+                uint8_t model;
+                uint8_t model_marker;
             } get_serial;
 
             struct {

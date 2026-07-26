@@ -202,10 +202,10 @@ moved_server::handle_request()
     PSMoveMovedRequest request;
     PSMoveMovedResponse response;
 
-    int res = recvfrom(socket, (char *)&request, sizeof(request),
+    int res = recvfrom(socket, (char *)request.bytes, sizeof(request.bytes),
             /*flags=*/0, (struct sockaddr *)&si_other, &si_len);
 
-    if (res != sizeof(request)) {
+    if (res != sizeof(request.bytes)) {
         return;
     }
 
@@ -249,6 +249,8 @@ moved_server::handle_request()
                     printf("Cannot convert serial\n");
                     return;
                 }
+                response.get_serial.model = (uint8_t)psmove_get_model(dev->move);
+                response.get_serial.model_marker = MOVED_CONTROLLER_MODEL_MARKER;
                 psmove_free_mem(serial);
             } else {
                 printf("Cannot read from device %d.\n", request.header.controller_id);
@@ -291,7 +293,7 @@ moved_server::handle_request()
             return;
     }
 
-    if (sendto(socket, (const char *)&response, sizeof(response),
+    if (sendto(socket, (const char *)response.bytes, sizeof(response.bytes),
             /*flags=*/0, (struct sockaddr *)&si_other, si_len) == -1) {
         PSMOVE_WARNING("Cannot send response");
     }
