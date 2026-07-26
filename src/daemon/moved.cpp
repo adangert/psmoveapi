@@ -392,6 +392,10 @@ move_daemon::handle_disconnect(const char *path)
         if (strcmp(path, dev_path) == 0) {
             delete (*it);
             it = devs.erase(it);
+            // Moved clients enumerate controller IDs from zero to count minus one.
+            for (size_t id = 0; id < devs.size(); id++) {
+                devs[id]->assigned_id = id;
+            }
             break;
         }
     }
