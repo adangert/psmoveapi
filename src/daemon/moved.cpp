@@ -48,7 +48,8 @@
 struct move_daemon;
 
 struct psmove_dev {
-    psmove_dev(move_daemon *moved, const char *path, const wchar_t *serial);
+    psmove_dev(move_daemon *moved, const char *path, const wchar_t *serial,
+            unsigned short pid);
     ~psmove_dev();
 
     void set_output(const unsigned char *output);
@@ -81,7 +82,8 @@ struct move_daemon : public moved_server {
     move_daemon();
     ~move_daemon();
 
-    void handle_connection(const char *path, const wchar_t *serial);
+    void handle_connection(const char *path, const wchar_t *serial,
+            unsigned short pid);
     void handle_disconnect(const char *path);
 
     void write_reports();
@@ -111,7 +113,7 @@ on_monitor_update_moved(enum MonitorEvent event,
             psmove_disconnect(move);
         }
 
-        moved->handle_connection(path, serial);
+        moved->handle_connection(path, serial, pid);
     } else if (event == EVENT_DEVICE_REMOVED) {
         moved->handle_disconnect(path);
     }
@@ -135,7 +137,7 @@ main(int argc, char *argv[])
 
     int id, count = psmove_count_connected();
     for (id=0; id<count; id++) {
-        moved.handle_connection(NULL, NULL);
+        moved.handle_connection(NULL, NULL, 0);
     }
 
 #if defined(__linux) || defined(__APPLE__)
@@ -305,15 +307,13 @@ moved_server::~moved_server()
 }
 
 
-psmove_dev::psmove_dev(move_daemon *moved, const char *path, const wchar_t *serial)
+psmove_dev::psmove_dev(move_daemon *moved, const char *path,
+        const wchar_t *serial, unsigned short pid)
     : dirty_output(0)
 {
     if (path != NULL) {
-        // TODO: FIXME: This should use the device's actual USB product ID.
-        // HACK: We rely on this invalid PID being translated to a
-        //       valid controller model (the old ZCM1, by default).
-        unsigned short pid = 0;
-        move = psmove_connect_internal((wchar_t *)serial, (char *)path, moved->count(), pid);
+        move = psmove_connect_internal((wchar_t *)serial, (char *)path,
+                moved->count(), pid);
     } else {
         move = psmove_connect_by_id(moved->count());
     }
@@ -342,9 +342,10 @@ move_daemon::move_daemon()
 }
 
 void
-move_daemon::handle_connection(const char *path, const wchar_t *serial)
+move_daemon::handle_connection(const char *path, const wchar_t *serial,
+        unsigned short pid)
 {
-    devs.push_back(new psmove_dev(this, path, serial));
+    devs.push_back(new psmove_dev(this, path, serial, pid));
     dump_devices();
 }
 
